@@ -1,9 +1,10 @@
 from typing import Optional, Sequence
 
+from kg_grafana import GrafanaBuilder, GrafanaOptions
 from kubragen import KubraGen
 from kubragen.builder import Builder
 from kubragen.data import ValueData
-from kubragen.exception import InvalidParamError, InvalidNameError
+from kubragen.exception import InvalidParamError, InvalidNameError, OptionError
 from kubragen.helper import LiteralStr, QuotedStr
 from kubragen.kdatahelper import KDataHelper_Volume
 from kubragen.object import ObjectItem, Object
@@ -53,6 +54,10 @@ class LokiStackBuilder(Builder):
           - Loki Service
         * - BUILDITEM_LOKI_STATEFULSET
           - Loki StatefulSet
+        * - BUILDITEM_GRAFANA_DEPLOYMENT
+          - Grafana Deployment
+        * - BUILDITEM_GRAFANA_SERVICE
+          - Grafana Service
 
     .. list-table::
         :header-rows: 1
@@ -93,10 +98,18 @@ class LokiStackBuilder(Builder):
         * - loki-pod-label-app
           - Loki label *app* to be used by selection
           - ```<basename>-loki```
+        * - grafana-service
+          - Grafana Service
+          - ```<basename>-grafana```
+        * - grafana-deployment
+          - Grafana Deployment
+          - ```<basename>-grafana```
     """
     options: LokiStackOptions
     configfile: Optional[str]
     _namespace: str
+
+    granana_config: Optional[GrafanaBuilder]
 
     SOURCE_NAME = 'kg_lokistack'
 
@@ -113,6 +126,8 @@ class LokiStackBuilder(Builder):
     BUILDITEM_LOKI_SERVICE_HEADLESS: TBuildItem = 'loki-service-headless'
     BUILDITEM_LOKI_SERVICE: TBuildItem = 'loki-service'
     BUILDITEM_LOKI_STATEFULSET: TBuildItem = 'loki-statefulset'
+    BUILDITEM_GRAFANA_DEPLOYMENT: TBuildItem = 'grafana-deployment'
+    BUILDITEM_GRAFANA_SERVICE: TBuildItem = 'grafana-service'
 
     def __init__(self, kubragen: KubraGen, options: Optional[LokiStackOptions] = None):
         super().__init__(kubragen)
@@ -134,6 +149,31 @@ class LokiStackBuilder(Builder):
             if serviceaccount_name is None:
                 raise InvalidParamError('To bind roles a service account is required')
 
+        if self.option_get('enable.grafana') is not False:
+            try:
+                self.granana_config = GrafanaBuilder(kubragen=kubragen, options=GrafanaOptions({
+                    'basename': self.basename('-grafana'),
+                    'namespace': self.namespace(),
+                    'config': {
+                        'install_plugins': self.option_get('config.grafana_install_plugins'),
+                        'service_port': self.option_get('config.grafana_service_port'),
+                    },
+                    'kubernetes': {
+                        'volumes': {
+                            'data': self.option_get('kubernetes.volumes.grafana-data'),
+                        },
+                        'resources': {
+                            'deployment': self.option_get('kubernetes.resources.grafana-deployment'),
+                        },
+                    },
+                }))
+            except OptionError as e:
+                raise OptionError('Grafana option error: {}'.format(str(e))) from e
+            except TypeError as e:
+                raise OptionError('Grafana type error: {}'.format(str(e))) from e
+        else:
+            self.granana_config = None
+
         self.object_names_update({
             'config': self.basename('-config'),
             'config-secret': self.basename('-config-secret'),
@@ -147,6 +187,12 @@ class LokiStackBuilder(Builder):
             'loki-statefulset': self.basename('-loki'),
             'loki-pod-label-app': self.basename('-loki'),
         })
+
+        if self.option_get('enable.grafana') is not False:
+            self.object_names_update({
+                'grafana-deployment': self.granana_config.object_name('deployment'),
+                'grafana-service': self.granana_config.object_name('service'),
+            })
 
     def option_get(self, name: str):
         return self.kubragen.option_root_get(self.options, name)
@@ -178,6 +224,8 @@ class LokiStackBuilder(Builder):
             self.BUILDITEM_LOKI_SERVICE_HEADLESS,
             self.BUILDITEM_LOKI_SERVICE,
             self.BUILDITEM_LOKI_STATEFULSET,
+            self.BUILDITEM_GRAFANA_DEPLOYMENT,
+            self.BUILDITEM_GRAFANA_SERVICE,
         ]
 
     def internal_build(self, buildname: TBuild) -> Sequence[ObjectItem]:
@@ -551,7 +599,19 @@ class LokiStackBuilder(Builder):
             }, name=self.BUILDITEM_LOKI_STATEFULSET, source=self.SOURCE_NAME, instance=self.basename()),
         ])
 
+        if self.option_get('enable.grafana') is not False:
+            ret.extend(self._build_result_change(
+                self.granana_config.build(self.granana_config.BUILD_SERVICE), 'grafana'))
+
         return ret
+
+    def _build_result_change(self, items: Sequence[ObjectItem], name_prefix: str) -> Sequence[ObjectItem]:
+        for o in items:
+            if isinstance(o, Object):
+                o.name = '{}-{}'.format(name_prefix, o.name)
+                o.source = self.SOURCE_NAME
+                o.instance = self.basename()
+        return items
 
     def loki_configfile(self):
         return '''auth_enabled: false

@@ -6,6 +6,8 @@
 kg_lokistack is a builder for [KubraGen](https://github.com/RangelReale/kubragen) that deploys 
 a [Loki Stack](https://grafana.com/oss/loki/) stack in Kubernetes.
 
+The Loki Stack consists of Loki, Promtail and Grafana (optional).
+
 [KubraGen](https://github.com/RangelReale/kubragen) is a Kubernetes YAML generator library that makes it possible to generate
 configurations using the full power of the Python programming language.
 
