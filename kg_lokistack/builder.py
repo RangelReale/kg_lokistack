@@ -16,7 +16,7 @@ class LokiStackBuilder(Builder):
     """
     Loki Stack builder.
 
-    Based on `lokistack/diy-kubernetes-examples <https://github.com/lokistack/diy-kubernetes-examples>`_.
+    Based on `Install Loki with Helm <https://grafana.com/docs/loki/latest/installation/helm/>`_.
 
     .. list-table::
         :header-rows: 1
@@ -26,31 +26,33 @@ class LokiStackBuilder(Builder):
         * - BUILD_ACCESSCONTROL
           - creates service account, roles, and roles bindings
         * - BUILD_CONFIG
-          - creates ConfigMap
+          - creates ConfigMap and Secret
         * - BUILD_SERVICE
-          - creates StatefulSet and Services
+          - creates deployments and services
 
     .. list-table::
         :header-rows: 1
 
         * - build item
           - description
-        * - BUILDITEM_SERVICE_ACCOUNT
-          - ServiceAccount
-        * - BUILDITEM_ROLE
-          - Role
-        * - BUILDITEM_ROLE_BINDING
-          - RoleBinding
         * - BUILDITEM_CONFIG
           - ConfigMap
         * - BUILDITEM_CONFIG_SECRET
           - Secret
-        * - BUILDITEM_SERVICE_HEADLESS
-          - Service (headless, internal, needed for Loki Stack)
-        * - BUILDITEM_STATEFULSET
-          - StatefulSet
-        * - BUILDITEM_SERVICE
-          - Service (for application use)
+        * - BUILDITEM_SERVICE_ACCOUNT
+          - ServiceAccount
+        * - BUILDITEM_PROMTAIL_CLUSTER_ROLE
+          - Promtail ClusterRole
+        * - BUILDITEM_PROMTAIL_CLUSTER_ROLE_BINDING
+          - Promtail ClusterRoleBinding
+        * - BUILDITEM_PROMTAIL_DAEMONSET
+          - Promtail Daemonset
+        * - BUILDITEM_LOKI_SERVICE_HEADLESS
+          - Loki Service Headless
+        * - BUILDITEM_LOKI_SERVICE
+          - Loki Service
+        * - BUILDITEM_LOKI_STATEFULSET
+          - Loki StatefulSet
 
     .. list-table::
         :header-rows: 1
@@ -64,27 +66,33 @@ class LokiStackBuilder(Builder):
         * - config-secret
           - Secret
           - ```<basename>-config-secret```
-        * - service-headless
-          - Service (headless)
-          - ```<basename>-headless```
-        * - service
-          - Service
-          - ```<basename>```
         * - service-account
           - ServiceAccount
           - ```<basename>```
-        * - role
-          - Role
-          - ```<basename>```
-        * - role-binding
-          - RoleBinding
-          - ```<basename>```
-        * - statefulset
-          - StatefulSet
-          - ```<basename>```
-        * - pod-label-all
-          - label *app* to be used by selection
-          - ```<basename>```
+        * - promtail-cluster-role
+          - Promtail cluster role
+          - ```<basename>-promtail```
+        * - promtail-cluster-role-binding
+          - Promtail cluster role binding
+          - ```<basename>-promtail```
+        * - promtail-daemonset
+          - Promtail DaemonSet
+          - ```<basename>-promtail```
+        * - promtail-pod-label-app
+          - Promtail label *app* to be used by selection
+          - ```<basename>-promtail```
+        * - loki-service-headless
+          - Loki Service headless
+          - ```<basename>-loki-headless```
+        * - loki-service
+          - Loki Service
+          - ```<basename>-loki```
+        * - loki-statefulset
+          - Loki StatefulSet
+          - ```<basename>-loki```
+        * - loki-pod-label-app
+          - Loki label *app* to be used by selection
+          - ```<basename>-loki```
     """
     options: LokiStackOptions
     configfile: Optional[str]
@@ -127,9 +135,9 @@ class LokiStackBuilder(Builder):
                 raise InvalidParamError('To bind roles a service account is required')
 
         self.object_names_update({
-            'service-account': serviceaccount_name,
             'config': self.basename('-config'),
             'config-secret': self.basename('-config-secret'),
+            'service-account': serviceaccount_name,
             'promtail-cluster-role': self.basename('-promtail'),
             'promtail-cluster-role-binding': self.basename('-promtail'),
             'promtail-daemonset': self.basename('-promtail'),

@@ -1,8 +1,5 @@
-import uuid
-from typing import Sequence, Optional, Any, Mapping
+from typing import Optional, Any, Mapping
 
-from kubragen.configfile import ConfigFile
-from kubragen.kdata import KData_Secret
 from kubragen.kdatahelper import KDataHelper_Volume
 from kubragen.option import OptionDef, OptionDefFormat
 from kubragen.options import Options
@@ -22,39 +19,15 @@ class LokiStackOptions(Options):
         * - basename
           - object names prefix
           - str
-          - ```lokistack```
+          - ```loki-stack```
         * - namespace
           - namespace
           - str
-          - ```lokistack```
-        * - config |rarr| enabled_plugins
-          - enabled plugins
-          - Sequence
-          - ```['lokistack_peer_discovery_k8s']```
-        * - config |rarr| lokistack_conf
-          - lokistack.conf file
-          - str, :class:`kubragen.configfile.ConfigFile`
-          - :class:`kg_lokistack.Loki StackConfigFile`
-        * - config |rarr| erlang_cookie
-          - erlang cookie
-          - str, dict, :class:`KData_Secret`
-          - ```uuid.uuid4()```
-        * - config |rarr| loglevel
-          - server log level
-          - str
-          - ```info```
-        * - config |rarr| enable_prometheus
-          - enable prometheus
-          - bool
-          - ```True```
+          - ```loki-stack```
         * - config |rarr| prometheus_annotation
           - add prometheus annotations
           - bool
           - ```False```
-        * - config |rarr| load_definitions
-          - load Loki Stack definitions
-          - bool, :class:`KData_Secret`
-          -
         * - config |rarr| authorization |rarr| serviceaccount_create
           - whether to create a service account
           - bool
@@ -71,20 +44,24 @@ class LokiStackOptions(Options):
           - whether to bind roles to service account
           - bool
           - ```True```
-        * - container |rarr| busybox
-          - busybox container image
+        * - container |rarr| promtail
+          - promtail container image
           - str
-          - ```busybox:<version>```
-        * - container |rarr| lokistack
-          - lokistack container image
+          - ```grafana/promtail:<version>```
+        * - container |rarr| loki
+          - loki container image
           - str
-          - ```lokistack:<version>```
-        * - kubernetes |rarr| volumes |rarr| data
-          - Kubernetes data volume
+          - ```grafana/loki:<version>```
+        * - kubernetes |rarr| volumes |rarr| loki-data
+          - Loki Kubernetes data volume
           - dict, :class:`KData_Value`, :class:`KData_ConfigMap`, :class:`KData_Secret`
           -
-        * - kubernetes |rarr| resources |rarr| statefulset
-          - Kubernetes StatefulSet resources
+        * - kubernetes |rarr| resources |rarr| promtail-daemonset
+          - Promtail Kubernetes StatefulSet resources
+          - dict
+          -
+        * - kubernetes |rarr| resources |rarr| loki-statefulset
+          - Loki Kubernetes StatefulSet resources
           - dict
           -
     """
