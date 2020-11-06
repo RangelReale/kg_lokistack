@@ -4,7 +4,7 @@ from .builder import (
 from .option import (
     LokiStackOptions
 )
-__version__ = "0.7.2"
+__version__ = "0.7.3"
 
 __all__ = [
     'LokiStackOptions',
