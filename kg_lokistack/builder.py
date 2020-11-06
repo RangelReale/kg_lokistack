@@ -595,7 +595,7 @@ storage_config:
     directory: /data/loki/chunks
 table_manager:
   retention_deletes_enabled: false
-  retention_period: 0s        
+  retention_period: 0s
 '''
 
     def promtail_configfile(self):
@@ -860,5 +860,5 @@ scrape_configs:
     source_labels:
     - __meta_kubernetes_pod_annotation_kubernetes_io_config_mirror
     - __meta_kubernetes_pod_container_name
-    target_label: __path__        
+    target_label: __path__
 '''
