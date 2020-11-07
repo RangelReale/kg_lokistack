@@ -1,3 +1,4 @@
+from kg_loki import LokiConfigFile, LokiConfigFileOptions
 from kubragen import KubraGen
 from kubragen.consts import PROVIDER_GOOGLE, PROVIDERSVC_GOOGLE_GKE
 from kubragen.object import Object
@@ -8,7 +9,6 @@ from kubragen.output import OutputProject, OD_FileTemplate, OutputFile_ShellScri
 from kubragen.provider import Provider
 
 from kg_lokistack import LokiStackBuilder, LokiStackOptions
-from kg_lokistack.lokiconfigfile import LokiConfigFile, LokiConfigFileOptions
 
 kg = KubraGen(provider=Provider(PROVIDER_GOOGLE, PROVIDERSVC_GOOGLE_GKE), options=Options({
     'namespaces': {
@@ -82,7 +82,7 @@ lokistack_config = LokiStackBuilder(kubragen=kg, options=LokiStackOptions({
 }))
 
 lokistack_config.ensure_build_names(lokistack_config.BUILD_ACCESSCONTROL, lokistack_config.BUILD_CONFIG,
-                                 lokistack_config.BUILD_SERVICE)
+                                    lokistack_config.BUILD_SERVICE)
 
 #
 # OUTPUTFILE: lokistack-config.yaml

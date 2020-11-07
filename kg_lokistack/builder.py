@@ -1,19 +1,16 @@
-from typing import Optional, Sequence
+import copy
+from typing import Optional, Sequence, Mapping
 
 from kg_grafana import GrafanaBuilder, GrafanaOptions
+from kg_loki import LokiBuilder, LokiOptions
+from kg_promtail import PromtailBuilder, PromtailOptions, PromtailConfigFile, PromtailConfigFileExt_Kubernetes
 from kubragen import KubraGen
 from kubragen.builder import Builder
-from kubragen.configfile import ConfigFileRenderMulti, ConfigFileRender_Yaml, ConfigFileRender_RawStr
-from kubragen.data import ValueData
 from kubragen.exception import InvalidParamError, InvalidNameError, OptionError
-from kubragen.helper import LiteralStr, QuotedStr
-from kubragen.kdatahelper import KDataHelper_Volume
 from kubragen.object import ObjectItem, Object
 from kubragen.types import TBuild, TBuildItem
 
-from .lokiconfigfile import LokiConfigFile
 from .option import LokiStackOptions
-from .promtailconfigfile import PromtailConfigFile, PromtailConfigFileExt_Kubernetes
 
 
 class LokiStackBuilder(Builder):
@@ -109,11 +106,8 @@ class LokiStackBuilder(Builder):
           - ```<basename>-grafana```
     """
     options: LokiStackOptions
-    lokiconfigfile: Optional[str]
-    promtailconfigfile: Optional[str]
     _namespace: str
-
-    granana_config: Optional[GrafanaBuilder]
+    _default_object_names: Mapping[str, str]
 
     SOURCE_NAME = 'kg_lokistack'
 
@@ -138,8 +132,7 @@ class LokiStackBuilder(Builder):
         if options is None:
             options = LokiStackOptions()
         self.options = options
-        self.lokiconfigfile = None
-        self.promtailconfigfile = None
+        self._default_object_names = {}
 
         self._namespace = self.option_get('namespace')
 
@@ -154,55 +147,43 @@ class LokiStackBuilder(Builder):
             if serviceaccount_name is None:
                 raise InvalidParamError('To bind roles a service account is required')
 
-        if self.option_get('enable.grafana') is not False:
-            try:
-                self.granana_config = GrafanaBuilder(kubragen=kubragen, options=GrafanaOptions({
-                    'basename': self.basename('-grafana'),
-                    'namespace': self.namespace(),
-                    'config': {
-                        'install_plugins': self.option_get('config.grafana_install_plugins'),
-                        'service_port': self.option_get('config.grafana_service_port'),
-                        'provisioning': {
-                            'datasources': self.option_get('config.grafana_provisioning.datasources'),
-                            'plugins': self.option_get('config.grafana_provisioning.plugins'),
-                            'dashboards': self.option_get('config.grafana_provisioning.dashboards'),
-                        },
-                    },
-                    'kubernetes': {
-                        'volumes': {
-                            'data': self.option_get('kubernetes.volumes.grafana-data'),
-                        },
-                        'resources': {
-                            'deployment': self.option_get('kubernetes.resources.grafana-deployment'),
-                        },
-                    },
-                }))
-            except OptionError as e:
-                raise OptionError('Grafana option error: {}'.format(str(e))) from e
-            except TypeError as e:
-                raise OptionError('Grafana type error: {}'.format(str(e))) from e
-        else:
-            self.granana_config = None
-
         self.object_names_update({
             'config': self.basename('-config'),
             'config-secret': self.basename('-config-secret'),
             'service-account': serviceaccount_name,
-            'promtail-cluster-role': self.basename('-promtail'),
-            'promtail-cluster-role-binding': self.basename('-promtail'),
-            'promtail-daemonset': self.basename('-promtail'),
-            'promtail-pod-label-app': self.basename('-promtail'),
-            'loki-service-headless': self.basename('-loki-headless'),
-            'loki-service': self.basename('-loki'),
-            'loki-statefulset': self.basename('-loki'),
-            'loki-pod-label-app': self.basename('-loki'),
+        })
+
+        loki_config = self._create_loki_config()
+        loki_config.ensure_build_names(loki_config.BUILD_CONFIG, loki_config.BUILD_SERVICE)
+
+        self.object_names_update({
+            'loki-service-headless': loki_config.object_name('service-headless'),
+            'loki-service': loki_config.object_name('service'),
+            'loki-statefulset': loki_config.object_name('statefulset'),
+            'loki-pod-label-app': loki_config.object_name('pod-label-app'),
+        })
+
+        promtail_config = self._create_promtail_config()
+        promtail_config.ensure_build_names(promtail_config.BUILD_ACCESSCONTROL, promtail_config.BUILD_CONFIG,
+                                           promtail_config.BUILD_SERVICE)
+
+        self.object_names_update({
+            'promtail-cluster-role': promtail_config.object_name('cluster-role'),
+            'promtail-cluster-role-binding': promtail_config.object_name('cluster-role-binding'),
+            'promtail-daemonset': promtail_config.object_name('daemonset'),
+            'promtail-pod-label-app': promtail_config.object_name('pod-label-app'),
         })
 
         if self.option_get('enable.grafana') is not False:
+            granana_config = self._create_granana_config()
+            granana_config.ensure_build_names(granana_config.BUILD_CONFIG, granana_config.BUILD_SERVICE)
+
             self.object_names_update({
-                'grafana-deployment': self.granana_config.object_name('deployment'),
-                'grafana-service': self.granana_config.object_name('service'),
+                'grafana-deployment': granana_config.object_name('deployment'),
+                'grafana-service': granana_config.object_name('service'),
             })
+
+        self._default_object_names = copy.deepcopy(self.object_names())
 
     def option_get(self, name: str):
         return self.kubragen.option_root_get(self.options, name)
@@ -309,309 +290,27 @@ class LokiStackBuilder(Builder):
     def internal_build_config(self) -> Sequence[ObjectItem]:
         ret = []
 
-        ret.append(Object({
-            'apiVersion': 'v1',
-            'kind': 'ConfigMap',
-            'metadata': {
-                'name': self.object_name('config'),
-                'namespace': self.namespace(),
-            },
-            'data': {
-                'promtail.yaml': LiteralStr(self.promtail_configfile_get()),
-            }
-        }, name=self.BUILDITEM_CONFIG, source=self.SOURCE_NAME, instance=self.basename()))
+        ret.extend(self._build_result_change(
+            self._create_promtail_config().build(PromtailBuilder.BUILD_ACCESSCONTROL,
+                                                 PromtailBuilder.BUILDITEM_CONFIG), 'promtail'))
 
-        ret.append(Object({
-            'apiVersion': 'v1',
-            'kind': 'Secret',
-            'metadata': {
-                'name': self.object_name('config-secret'),
-                'namespace': self.namespace(),
-            },
-            'type': 'Opaque',
-            'data': {
-                'loki.yaml': self.kubragen.secret_data_encode(self.loki_configfile_get()),
-            }
-        }, name=self.BUILDITEM_CONFIG_SECRET, source=self.SOURCE_NAME, instance=self.basename()))
+        ret.extend(self._build_result_change(
+            self._create_loki_config().build(LokiBuilder.BUILD_CONFIG), 'loki'))
 
         return ret
 
     def internal_build_service(self) -> Sequence[ObjectItem]:
         ret = []
 
-        ret.extend([
-            Object({
-                'apiVersion': 'v1',
-                'kind': 'Service',
-                'metadata': {
-                    'name': self.object_name('loki-service-headless'),
-                    'namespace': self.namespace(),
-                    'labels': {
-                        'app': self.object_name('loki-pod-label-app'),
-                    }
-                },
-                'spec': {
-                    'clusterIP': 'None',
-                    'ports': [{
-                        'port': self.option_get('config.loki_service_port'),
-                        'protocol': 'TCP',
-                        'name': 'http-metrics',
-                        'targetPort': 'http-metrics'
-                    }],
-                    'selector': {
-                        'app': self.object_name('loki-pod-label-app'),
-                    }
-                }
-            }, name=self.BUILDITEM_LOKI_SERVICE_HEADLESS, source=self.SOURCE_NAME, instance=self.basename()),
-            Object({
-                'apiVersion': 'v1',
-                'kind': 'Service',
-                'metadata': {
-                    'name': self.object_name('loki-service'),
-                    'namespace': self.namespace(),
-                    'labels': {
-                        'app': self.object_name('loki-pod-label-app'),
-                    },
-                },
-                'spec': {
-                    'type': 'ClusterIP',
-                    'ports': [{
-                        'port': self.option_get('config.loki_service_port'),
-                        'protocol': 'TCP',
-                        'name': 'http-metrics',
-                        'targetPort': 'http-metrics'
-                    }],
-                    'selector': {
-                        'app': self.object_name('loki-pod-label-app'),
-                    },
-                }
-            }, name=self.BUILDITEM_LOKI_SERVICE, source=self.SOURCE_NAME, instance=self.basename()),
-            Object({
-                'apiVersion': 'apps/v1',
-                'kind': 'DaemonSet',
-                'metadata': {
-                    'name': self.object_name('promtail-daemonset'),
-                    'namespace': self.namespace(),
-                    'labels': {
-                        'app': self.object_name('promtail-pod-label-app'),
-                    },
-                },
-                'spec': {
-                    'selector': {
-                        'matchLabels': {
-                            'app': self.object_name('promtail-pod-label-app'),
-                        }
-                    },
-                    'template': {
-                        'metadata': {
-                            'labels': {
-                                'app': self.object_name('promtail-pod-label-app'),
-                            },
-                            'annotations': ValueData({
-                                'prometheus.io/scrape': QuotedStr('true'),
-                                'prometheus.io/port': QuotedStr('http-metrics'),
-                            }, enabled=self.option_get('config.prometheus_annotation') is not False),
-                        },
-                        'spec': {
-                            'serviceAccountName': self.object_name('service-account'),
-                            'containers': [{
-                                'name': 'promtail',
-                                'image': self.option_get('container.promtail'),
-                                'args': [
-                                    '-config.file=/etc/promtail/promtail.yaml',
-                                    '-client.url=http://{}:{}/loki/api/v1/push'.format(
-                                        self.object_name('loki-service'), self.option_get('config.loki_service_port'))
-                                ],
-                                'volumeMounts': [{
-                                    'name': 'config',
-                                    'mountPath': '/etc/promtail'
-                                },
-                                {
-                                    'name': 'run',
-                                    'mountPath': '/run/promtail'
-                                },
-                                {
-                                    'mountPath': '/var/lib/docker/containers',
-                                    'name': 'docker',
-                                    'readOnly': True
-                                },
-                                {
-                                    'mountPath': '/var/log/pods',
-                                    'name': 'pods',
-                                    'readOnly': True
-                                }],
-                                'env': [{
-                                    'name': 'HOSTNAME',
-                                    'valueFrom': {
-                                        'fieldRef': {
-                                            'fieldPath': 'spec.nodeName'
-                                        }
-                                    },
-                                }],
-                                'ports': [{
-                                    'containerPort': 3101,
-                                    'name': 'http-metrics'
-                                }],
-                                'securityContext': {
-                                    'readOnlyRootFilesystem': True,
-                                    'runAsGroup': 0,
-                                    'runAsUser': 0
-                                },
-                                'readinessProbe': {
-                                    'failureThreshold': 5,
-                                    'httpGet': {
-                                        'path': '/ready',
-                                        'port': 'http-metrics'
-                                    },
-                                    'initialDelaySeconds': 10,
-                                    'periodSeconds': 10,
-                                    'successThreshold': 1,
-                                    'timeoutSeconds': 1
-                                },
-                                'resources': ValueData(
-                                    value=self.option_get('kubernetes.resources.promtail-daemonset'),
-                                    disabled_if_none=True),
-                            }],
-                            'tolerations': [{
-                                'effect': 'NoSchedule',
-                                'key': 'node-role.kubernetes.io/master',
-                                'operator': 'Exists'
-                            }],
-                            'volumes': [{
-                                'name': 'config',
-                                'configMap': {
-                                    'name': self.object_name('config'),
-                                    'items': [{
-                                        'key': 'promtail.yaml',
-                                        'path': 'promtail.yaml',
-                                    }]
-                                }
-                            },
-                            {
-                                'name': 'run',
-                                'hostPath': {
-                                    'path': '/run/promtail'
-                                }
-                            },
-                            {
-                                'hostPath': {
-                                    'path': '/var/lib/docker/containers'
-                                },
-                                'name': 'docker'
-                            },
-                            {
-                                'hostPath': {
-                                    'path': '/var/log/pods'
-                                },
-                                'name': 'pods'
-                            }]
-                        }
-                    }
-                }
-            }, name=self.BUILDITEM_PROMTAIL_DAEMONSET, source=self.SOURCE_NAME, instance=self.basename()),
-            Object({
-                'apiVersion': 'apps/v1',
-                'kind': 'StatefulSet',
-                'metadata': {
-                    'name': self.object_name('loki-statefulset'),
-                    'namespace': self.namespace(),
-                    'labels': {
-                        'app': self.object_name('loki-pod-label-app'),
-                    },
-                },
-                'spec': {
-                    'podManagementPolicy': 'OrderedReady',
-                    'replicas': 1,
-                    'selector': {
-                        'matchLabels': {
-                            'app': self.object_name('loki-pod-label-app'),
-                        }
-                    },
-                    'serviceName': self.object_name('loki-service-headless'),
-                    'updateStrategy': {
-                        'type': 'RollingUpdate'
-                    },
-                    'template': {
-                        'metadata': {
-                            'labels': {
-                                'app': self.object_name('loki-pod-label-app'),
-                            },
-                            'annotations': ValueData({
-                                'prometheus.io/scrape': QuotedStr('true'),
-                                'prometheus.io/port': QuotedStr('http-metrics'),
-                            }, enabled=self.option_get('config.prometheus_annotation') is not False),
-                        },
-                        'spec': {
-                            'serviceAccountName': self.object_name('service-account'),
-                            'securityContext': {
-                                'fsGroup': 10001,
-                                'runAsGroup': 10001,
-                                'runAsNonRoot': True,
-                                'runAsUser': 10001
-                            },
-                            'containers': [{
-                                'name': 'loki',
-                                'image': self.option_get('container.loki'),
-                                'args': [
-                                    '-config.file=/etc/loki/loki.yaml'
-                                ],
-                                'volumeMounts': [{
-                                    'name': 'config',
-                                    'mountPath': '/etc/loki'
-                                },
-                                {
-                                    'name': 'storage',
-                                    'mountPath': '/data',
-                                    'subPath': None
-                                }],
-                                'ports': [{
-                                    'name': 'http-metrics',
-                                    'containerPort': 3100,
-                                    'protocol': 'TCP'
-                                }],
-                                'livenessProbe': {
-                                    'httpGet': {
-                                        'path': '/ready',
-                                        'port': 'http-metrics'
-                                    },
-                                    'initialDelaySeconds': 45
-                                },
-                                'readinessProbe': {
-                                    'httpGet': {
-                                        'path': '/ready',
-                                        'port': 'http-metrics'
-                                    },
-                                    'initialDelaySeconds': 45
-                                },
-                                'securityContext': {
-                                    'readOnlyRootFilesystem': True
-                                },
-                                'resources': ValueData(value=self.option_get('kubernetes.resources.loki-statefulset'),
-                                                       disabled_if_none=True),
-                            }],
-                            'terminationGracePeriodSeconds': 4800,
-                            'volumes': [{
-                                'name': 'config',
-                                'secret': {
-                                    'secretName': self.object_name('config-secret'),
-                                    'items': [{
-                                        'key': 'loki.yaml',
-                                        'path': 'loki.yaml',
-                                    }]
-                                }
-                            },
-                            KDataHelper_Volume.info(base_value={
-                                'name': 'storage',
-                            }, value=self.option_get('kubernetes.volumes.loki-data'))]
-                        }
-                    }
-                }
-            }, name=self.BUILDITEM_LOKI_STATEFULSET, source=self.SOURCE_NAME, instance=self.basename()),
-        ])
+        ret.extend(self._build_result_change(
+            self._create_loki_config().build(LokiBuilder.BUILD_SERVICE), 'loki'))
+
+        ret.extend(self._build_result_change(
+            self._create_promtail_config().build(PromtailBuilder.BUILD_SERVICE), 'promtail'))
 
         if self.option_get('enable.grafana') is not False:
             ret.extend(self._build_result_change(
-                self.granana_config.build(self.granana_config.BUILD_SERVICE), 'grafana'))
+                self._create_granana_config().build(GrafanaBuilder.BUILD_SERVICE), 'grafana'))
 
         return ret
 
@@ -623,34 +322,109 @@ class LokiStackBuilder(Builder):
                 o.instance = self.basename()
         return items
 
-    def loki_configfile_get(self) -> str:
-        if self.lokiconfigfile is None:
-            configfile = self.option_get('config.loki_config')
-            if configfile is None:
-                configfile = LokiConfigFile()
-            if isinstance(configfile, str):
-                self.lokiconfigfile = configfile
-            else:
-                configfilerender = ConfigFileRenderMulti([
-                    ConfigFileRender_Yaml(),
-                    ConfigFileRender_RawStr()
-                ])
-                self.lokiconfigfile = configfilerender.render(configfile.get_value(self))
-        return self.lokiconfigfile
+    def _object_names_changed(self, prefix: str) -> Mapping[str, str]:
+        ret = {}
+        for dname, dvalue in self.object_names().items():
+            if dname.startswith(prefix) and dname in self._default_object_names:
+                if self._default_object_names[dname] != dvalue:
+                    ret[dname[len(prefix):]] = dvalue
+        return ret
 
-    def promtail_configfile_get(self) -> str:
-        if self.promtailconfigfile is None:
-            configfile = self.option_get('config.promtail_config')
-            if configfile is None:
-                configfile = PromtailConfigFile(extensions=[
-                    PromtailConfigFileExt_Kubernetes(),
-                ])
-            if isinstance(configfile, str):
-                self.promtailconfigfile = configfile
-            else:
-                configfilerender = ConfigFileRenderMulti([
-                    ConfigFileRender_Yaml(),
-                    ConfigFileRender_RawStr()
-                ])
-                self.promtailconfigfile = configfilerender.render(configfile.get_value(self))
-        return self.promtailconfigfile
+    def _create_loki_config(self) -> LokiBuilder:
+        try:
+            ret = LokiBuilder(kubragen=self.kubragen, options=LokiOptions({
+                'basename': self.basename('-loki'),
+                'namespace': self.namespace(),
+                'config': {
+                    'prometheus_annotation': self.option_get('config.prometheus_annotation'),
+                    'loki_config': self.option_get('config.loki_config'),
+                    'service_port': self.option_get('config.loki_service_port'),
+                    'authorization': {
+                        'serviceaccount_use': self.object_name('service-account'),
+                    },
+                },
+                'kubernetes': {
+                    'volumes': {
+                        'data': self.option_get('kubernetes.volumes.loki-data'),
+                    },
+                    'resources': {
+                        'statefulset': self.option_get('kubernetes.resources.loki-statefulset'),
+                    },
+                },
+            }))
+            ret.object_names_change(self._object_names_changed('loki-'))
+            return ret
+        except OptionError as e:
+            raise OptionError('Grafana option error: {}'.format(str(e))) from e
+        except TypeError as e:
+            raise OptionError('Grafana type error: {}'.format(str(e))) from e
+
+    def _create_promtail_config(self) -> PromtailBuilder:
+        try:
+            config = self.option_get('config.promtail_config')
+            if config is None:
+                config = PromtailConfigFile(extensions=[PromtailConfigFileExt_Kubernetes()])
+
+            ret = PromtailBuilder(kubragen=self.kubragen, options=PromtailOptions({
+                'basename': self.basename('-promtail'),
+                'namespace': self.namespace(),
+                'config': {
+                    'prometheus_annotation': self.option_get('config.prometheus_annotation'),
+                    'promtail_config': config,
+                    'loki_url': 'http://{}:{}'.format(self.object_name('loki-service'),
+                                                      self.option_get('config.loki_service_port')),
+                    'authorization': {
+                        'serviceaccount_create': False,
+                        'serviceaccount_use': self.object_name('service-account'),
+                        'roles_create': self.option_get('config.authorization.roles_create'),
+                        'roles_bind': self.option_get('config.authorization.roles_bind'),
+                    },
+                },
+                'container': {
+                    'promtail': self.option_get('container.promtail'),
+                },
+                'kubernetes': {
+                    'resources': {
+                        'daemonset': self.option_get('kubernetes.resources.promtail-daemonset'),
+                    },
+                },
+            }))
+            ret.object_names_change(self._object_names_changed('promtail-'))
+            return ret
+        except OptionError as e:
+            raise OptionError('Prometheus option error: {}'.format(str(e))) from e
+        except TypeError as e:
+            raise OptionError('Prometheus type error: {}'.format(str(e))) from e
+
+    def _create_granana_config(self) -> Optional[GrafanaBuilder]:
+        if self.option_get('enable.grafana') is not False:
+            try:
+                ret = GrafanaBuilder(kubragen=self.kubragen, options=GrafanaOptions({
+                    'basename': self.basename('-grafana'),
+                    'namespace': self.namespace(),
+                    'config': {
+                        'install_plugins': self.option_get('config.grafana_install_plugins'),
+                        'service_port': self.option_get('config.grafana_service_port'),
+                        'provisioning': {
+                            'datasources': self.option_get('config.grafana_provisioning.datasources'),
+                            'plugins': self.option_get('config.grafana_provisioning.plugins'),
+                            'dashboards': self.option_get('config.grafana_provisioning.dashboards'),
+                        },
+                    },
+                    'kubernetes': {
+                        'volumes': {
+                            'data': self.option_get('kubernetes.volumes.grafana-data'),
+                        },
+                        'resources': {
+                            'deployment': self.option_get('kubernetes.resources.grafana-deployment'),
+                        },
+                    },
+                }))
+                ret.object_names_change(self._object_names_changed('grafana-'))
+                return ret
+            except OptionError as e:
+                raise OptionError('Grafana option error: {}'.format(str(e))) from e
+            except TypeError as e:
+                raise OptionError('Grafana type error: {}'.format(str(e))) from e
+        else:
+            return None

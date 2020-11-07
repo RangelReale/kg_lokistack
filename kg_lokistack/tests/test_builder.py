@@ -12,7 +12,15 @@ class TestBuilder(unittest.TestCase):
         self.kg = KubraGen(provider=Provider_Generic())
 
     def test_empty(self):
-        lokistack_config = LokiStackBuilder(kubragen=self.kg)
+        lokistack_config = LokiStackBuilder(kubragen=self.kg, options=LokiStackOptions({
+            'kubernetes': {
+                'volumes': {
+                    'loki-data': {
+                        'emptyDir': {},
+                    }
+                }
+            }
+        }))
         self.assertEqual(lokistack_config.object_name('config'), 'loki-stack-config')
         self.assertEqual(lokistack_config.object_name('loki-statefulset'), 'loki-stack-loki')
 

@@ -19,6 +19,7 @@ configurations using the full power of the Python programming language.
 ## Example
 
 ```python
+from kg_loki import LokiConfigFile, LokiConfigFileOptions
 from kubragen import KubraGen
 from kubragen.consts import PROVIDER_GOOGLE, PROVIDERSVC_GOOGLE_GKE
 from kubragen.object import Object
@@ -66,10 +67,17 @@ shell_script.append(f'kubectl config set-context --current --namespace=app-monit
 #
 # SETUP: lokistack
 #
+lokiconfigfile = LokiConfigFile(options=LokiConfigFileOptions({
+}))
+
 lokistack_config = LokiStackBuilder(kubragen=kg, options=LokiStackOptions({
     'namespace': OptionRoot('namespaces.mon'),
     'basename': 'mylokistack',
     'config': {
+        'loki_config': lokiconfigfile,
+    },
+    'enable': {
+        'grafana': True,
     },
     'kubernetes': {
         'volumes': {
@@ -95,7 +103,7 @@ lokistack_config = LokiStackBuilder(kubragen=kg, options=LokiStackOptions({
 }))
 
 lokistack_config.ensure_build_names(lokistack_config.BUILD_ACCESSCONTROL, lokistack_config.BUILD_CONFIG,
-                                 lokistack_config.BUILD_SERVICE)
+                                    lokistack_config.BUILD_SERVICE)
 
 #
 # OUTPUTFILE: lokistack-config.yaml
