@@ -117,7 +117,9 @@ class LokiStackOptions(Options):
             'namespace': OptionDef(required=True, default_value='loki-stack', allowed_types=[str]),
             'config': {
                 'prometheus_annotation': OptionDef(required=True, default_value=False, allowed_types=[bool]),
+                'loki_config': OptionDef(allowed_types=[str, ConfigFile]),
                 'loki_service_port': OptionDef(required=True, default_value=3100, allowed_types=[int]),
+                'promtail_config': OptionDef(allowed_types=[str, ConfigFile]),
                 'grafana_service_port': OptionDef(required=True, default_value=80, allowed_types=[int]),
                 'grafana_install_plugins': OptionDef(default_value=[], allowed_types=[Sequence]),
                 'grafana_provisioning': {

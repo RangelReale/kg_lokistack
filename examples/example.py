@@ -8,6 +8,7 @@ from kubragen.output import OutputProject, OD_FileTemplate, OutputFile_ShellScri
 from kubragen.provider import Provider
 
 from kg_lokistack import LokiStackBuilder, LokiStackOptions
+from kg_lokistack.lokiconfigfile import LokiConfigFile, LokiConfigFileOptions
 
 kg = KubraGen(provider=Provider(PROVIDER_GOOGLE, PROVIDERSVC_GOOGLE_GKE), options=Options({
     'namespaces': {
@@ -45,10 +46,14 @@ shell_script.append(f'kubectl config set-context --current --namespace=app-monit
 #
 # SETUP: lokistack
 #
+lokiconfigfile = LokiConfigFile(options=LokiConfigFileOptions({
+}))
+
 lokistack_config = LokiStackBuilder(kubragen=kg, options=LokiStackOptions({
     'namespace': OptionRoot('namespaces.mon'),
     'basename': 'mylokistack',
     'config': {
+        'loki_config': lokiconfigfile,
     },
     'enable': {
         'grafana': True,

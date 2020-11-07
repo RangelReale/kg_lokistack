@@ -1,2 +1,2 @@
-kubragen>=0.7.15
+kubragen>=0.7.16
 kg-grafana>=0.7.6

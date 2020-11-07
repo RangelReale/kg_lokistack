@@ -3,6 +3,7 @@ from typing import Optional, Sequence
 from kg_grafana import GrafanaBuilder, GrafanaOptions
 from kubragen import KubraGen
 from kubragen.builder import Builder
+from kubragen.configfile import ConfigFileRenderMulti, ConfigFileRender_Yaml, ConfigFileRender_RawStr
 from kubragen.data import ValueData
 from kubragen.exception import InvalidParamError, InvalidNameError, OptionError
 from kubragen.helper import LiteralStr, QuotedStr
@@ -10,7 +11,9 @@ from kubragen.kdatahelper import KDataHelper_Volume
 from kubragen.object import ObjectItem, Object
 from kubragen.types import TBuild, TBuildItem
 
+from .lokiconfigfile import LokiConfigFile
 from .option import LokiStackOptions
+from .promtailconfigfile import PromtailConfigFile, PromtailConfigFileExt_Kubernetes
 
 
 class LokiStackBuilder(Builder):
@@ -106,7 +109,8 @@ class LokiStackBuilder(Builder):
           - ```<basename>-grafana```
     """
     options: LokiStackOptions
-    configfile: Optional[str]
+    lokiconfigfile: Optional[str]
+    promtailconfigfile: Optional[str]
     _namespace: str
 
     granana_config: Optional[GrafanaBuilder]
@@ -134,7 +138,8 @@ class LokiStackBuilder(Builder):
         if options is None:
             options = LokiStackOptions()
         self.options = options
-        self.configfile = None
+        self.lokiconfigfile = None
+        self.promtailconfigfile = None
 
         self._namespace = self.option_get('namespace')
 
@@ -312,7 +317,7 @@ class LokiStackBuilder(Builder):
                 'namespace': self.namespace(),
             },
             'data': {
-                'promtail.yaml': LiteralStr(self.promtail_configfile()),
+                'promtail.yaml': LiteralStr(self.promtail_configfile_get()),
             }
         }, name=self.BUILDITEM_CONFIG, source=self.SOURCE_NAME, instance=self.basename()))
 
@@ -325,7 +330,7 @@ class LokiStackBuilder(Builder):
             },
             'type': 'Opaque',
             'data': {
-                'loki.yaml': self.kubragen.secret_data_encode(self.loki_configfile()),
+                'loki.yaml': self.kubragen.secret_data_encode(self.loki_configfile_get()),
             }
         }, name=self.BUILDITEM_CONFIG_SECRET, source=self.SOURCE_NAME, instance=self.basename()))
 
@@ -618,312 +623,34 @@ class LokiStackBuilder(Builder):
                 o.instance = self.basename()
         return items
 
-    def loki_configfile(self):
-        return '''auth_enabled: false
-chunk_store_config:
-  max_look_back_period: 0s
-compactor:
-  shared_store: filesystem
-  working_directory: /data/loki/boltdb-shipper-compactor
-ingester:
-  chunk_block_size: 262144
-  chunk_idle_period: 3m
-  chunk_retain_period: 1m
-  lifecycler:
-    ring:
-      kvstore:
-        store: inmemory
-      replication_factor: 1
-  max_transfer_retries: 0
-limits_config:
-  enforce_metric_name: false
-  reject_old_samples: true
-  reject_old_samples_max_age: 168h
-schema_config:
-  configs:
-  - from: "2020-10-24"
-    index:
-      period: 24h
-      prefix: index_
-    object_store: filesystem
-    schema: v11
-    store: boltdb-shipper
-server:
-  http_listen_port: 3100
-storage_config:
-  boltdb_shipper:
-    active_index_directory: /data/loki/boltdb-shipper-active
-    cache_location: /data/loki/boltdb-shipper-cache
-    cache_ttl: 24h
-    shared_store: filesystem
-  filesystem:
-    directory: /data/loki/chunks
-table_manager:
-  retention_deletes_enabled: false
-  retention_period: 0s
-'''
+    def loki_configfile_get(self) -> str:
+        if self.lokiconfigfile is None:
+            configfile = self.option_get('config.loki_config')
+            if configfile is None:
+                configfile = LokiConfigFile()
+            if isinstance(configfile, str):
+                self.lokiconfigfile = configfile
+            else:
+                configfilerender = ConfigFileRenderMulti([
+                    ConfigFileRender_Yaml(),
+                    ConfigFileRender_RawStr()
+                ])
+                self.lokiconfigfile = configfilerender.render(configfile.get_value(self))
+        return self.lokiconfigfile
 
-    def promtail_configfile(self):
-        return '''client:
-  backoff_config:
-    max_period: 5m
-    max_retries: 10
-    min_period: 500ms
-  batchsize: 1048576
-  batchwait: 1s
-  external_labels: {}
-  timeout: 10s
-positions:
-  filename: /run/promtail/positions.yaml
-server:
-  http_listen_port: 3101
-target_config:
-  sync_period: 10s
-scrape_configs:
-- job_name: kubernetes-pods-name
-  pipeline_stages:
-    - docker: {}
-  kubernetes_sd_configs:
-  - role: pod
-  relabel_configs:
-  - source_labels:
-    - __meta_kubernetes_pod_label_name
-    target_label: __service__
-  - source_labels:
-    - __meta_kubernetes_pod_node_name
-    target_label: __host__
-  - action: drop
-    regex: ''
-    source_labels:
-    - __service__
-  - action: labelmap
-    regex: __meta_kubernetes_pod_label_(.+)
-  - action: replace
-    replacement: $1
-    separator: /
-    source_labels:
-    - __meta_kubernetes_namespace
-    - __service__
-    target_label: job
-  - action: replace
-    source_labels:
-    - __meta_kubernetes_namespace
-    target_label: namespace
-  - action: replace
-    source_labels:
-    - __meta_kubernetes_pod_name
-    target_label: pod
-  - action: replace
-    source_labels:
-    - __meta_kubernetes_pod_container_name
-    target_label: container
-  - replacement: /var/log/pods/*$1/*.log
-    separator: /
-    source_labels:
-    - __meta_kubernetes_pod_uid
-    - __meta_kubernetes_pod_container_name
-    target_label: __path__
-- job_name: kubernetes-pods-app
-  pipeline_stages:
-    - docker: {}
-  kubernetes_sd_configs:
-  - role: pod
-  relabel_configs:
-  - action: drop
-    regex: .+
-    source_labels:
-    - __meta_kubernetes_pod_label_name
-  - source_labels:
-    - __meta_kubernetes_pod_label_app
-    target_label: __service__
-  - source_labels:
-    - __meta_kubernetes_pod_node_name
-    target_label: __host__
-  - action: drop
-    regex: ''
-    source_labels:
-    - __service__
-  - action: labelmap
-    regex: __meta_kubernetes_pod_label_(.+)
-  - action: replace
-    replacement: $1
-    separator: /
-    source_labels:
-    - __meta_kubernetes_namespace
-    - __service__
-    target_label: job
-  - action: replace
-    source_labels:
-    - __meta_kubernetes_namespace
-    target_label: namespace
-  - action: replace
-    source_labels:
-    - __meta_kubernetes_pod_name
-    target_label: pod
-  - action: replace
-    source_labels:
-    - __meta_kubernetes_pod_container_name
-    target_label: container
-  - replacement: /var/log/pods/*$1/*.log
-    separator: /
-    source_labels:
-    - __meta_kubernetes_pod_uid
-    - __meta_kubernetes_pod_container_name
-    target_label: __path__
-- job_name: kubernetes-pods-direct-controllers
-  pipeline_stages:
-    - docker: {}
-  kubernetes_sd_configs:
-  - role: pod
-  relabel_configs:
-  - action: drop
-    regex: .+
-    separator: ''
-    source_labels:
-    - __meta_kubernetes_pod_label_name
-    - __meta_kubernetes_pod_label_app
-  - action: drop
-    regex: '[0-9a-z-.]+-[0-9a-f]{8,10}'
-    source_labels:
-    - __meta_kubernetes_pod_controller_name
-  - source_labels:
-    - __meta_kubernetes_pod_controller_name
-    target_label: __service__
-  - source_labels:
-    - __meta_kubernetes_pod_node_name
-    target_label: __host__
-  - action: drop
-    regex: ''
-    source_labels:
-    - __service__
-  - action: labelmap
-    regex: __meta_kubernetes_pod_label_(.+)
-  - action: replace
-    replacement: $1
-    separator: /
-    source_labels:
-    - __meta_kubernetes_namespace
-    - __service__
-    target_label: job
-  - action: replace
-    source_labels:
-    - __meta_kubernetes_namespace
-    target_label: namespace
-  - action: replace
-    source_labels:
-    - __meta_kubernetes_pod_name
-    target_label: pod
-  - action: replace
-    source_labels:
-    - __meta_kubernetes_pod_container_name
-    target_label: container
-  - replacement: /var/log/pods/*$1/*.log
-    separator: /
-    source_labels:
-    - __meta_kubernetes_pod_uid
-    - __meta_kubernetes_pod_container_name
-    target_label: __path__
-- job_name: kubernetes-pods-indirect-controller
-  pipeline_stages:
-    - docker: {}
-  kubernetes_sd_configs:
-  - role: pod
-  relabel_configs:
-  - action: drop
-    regex: .+
-    separator: ''
-    source_labels:
-    - __meta_kubernetes_pod_label_name
-    - __meta_kubernetes_pod_label_app
-  - action: keep
-    regex: '[0-9a-z-.]+-[0-9a-f]{8,10}'
-    source_labels:
-    - __meta_kubernetes_pod_controller_name
-  - action: replace
-    regex: '([0-9a-z-.]+)-[0-9a-f]{8,10}'
-    source_labels:
-    - __meta_kubernetes_pod_controller_name
-    target_label: __service__
-  - source_labels:
-    - __meta_kubernetes_pod_node_name
-    target_label: __host__
-  - action: drop
-    regex: ''
-    source_labels:
-    - __service__
-  - action: labelmap
-    regex: __meta_kubernetes_pod_label_(.+)
-  - action: replace
-    replacement: $1
-    separator: /
-    source_labels:
-    - __meta_kubernetes_namespace
-    - __service__
-    target_label: job
-  - action: replace
-    source_labels:
-    - __meta_kubernetes_namespace
-    target_label: namespace
-  - action: replace
-    source_labels:
-    - __meta_kubernetes_pod_name
-    target_label: pod
-  - action: replace
-    source_labels:
-    - __meta_kubernetes_pod_container_name
-    target_label: container
-  - replacement: /var/log/pods/*$1/*.log
-    separator: /
-    source_labels:
-    - __meta_kubernetes_pod_uid
-    - __meta_kubernetes_pod_container_name
-    target_label: __path__
-- job_name: kubernetes-pods-static
-  pipeline_stages:
-    - docker: {}
-  kubernetes_sd_configs:
-  - role: pod
-  relabel_configs:
-  - action: drop
-    regex: ''
-    source_labels:
-    - __meta_kubernetes_pod_annotation_kubernetes_io_config_mirror
-  - action: replace
-    source_labels:
-    - __meta_kubernetes_pod_label_component
-    target_label: __service__
-  - source_labels:
-    - __meta_kubernetes_pod_node_name
-    target_label: __host__
-  - action: drop
-    regex: ''
-    source_labels:
-    - __service__
-  - action: labelmap
-    regex: __meta_kubernetes_pod_label_(.+)
-  - action: replace
-    replacement: $1
-    separator: /
-    source_labels:
-    - __meta_kubernetes_namespace
-    - __service__
-    target_label: job
-  - action: replace
-    source_labels:
-    - __meta_kubernetes_namespace
-    target_label: namespace
-  - action: replace
-    source_labels:
-    - __meta_kubernetes_pod_name
-    target_label: pod
-  - action: replace
-    source_labels:
-    - __meta_kubernetes_pod_container_name
-    target_label: container
-  - replacement: /var/log/pods/*$1/*.log
-    separator: /
-    source_labels:
-    - __meta_kubernetes_pod_annotation_kubernetes_io_config_mirror
-    - __meta_kubernetes_pod_container_name
-    target_label: __path__
-'''
+    def promtail_configfile_get(self) -> str:
+        if self.promtailconfigfile is None:
+            configfile = self.option_get('config.promtail_config')
+            if configfile is None:
+                configfile = PromtailConfigFile(extensions=[
+                    PromtailConfigFileExt_Kubernetes(),
+                ])
+            if isinstance(configfile, str):
+                self.promtailconfigfile = configfile
+            else:
+                configfilerender = ConfigFileRenderMulti([
+                    ConfigFileRender_Yaml(),
+                    ConfigFileRender_RawStr()
+                ])
+                self.promtailconfigfile = configfilerender.render(configfile.get_value(self))
+        return self.promtailconfigfile
