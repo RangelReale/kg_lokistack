@@ -36,18 +36,18 @@ class LokiStackBuilder(Builder):
 
         * - build item
           - description
-        * - BUILDITEM_CONFIG
-          - ConfigMap
-        * - BUILDITEM_CONFIG_SECRET
-          - Secret
         * - BUILDITEM_SERVICE_ACCOUNT
           - ServiceAccount
+        * - BUILDITEM_PROMTAIL_CONFIG
+          - Promtail ConfigMap
         * - BUILDITEM_PROMTAIL_CLUSTER_ROLE
           - Promtail ClusterRole
         * - BUILDITEM_PROMTAIL_CLUSTER_ROLE_BINDING
           - Promtail ClusterRoleBinding
         * - BUILDITEM_PROMTAIL_DAEMONSET
           - Promtail Daemonset
+        * - BUILDITEM_CONFIG_LOKI_SECRET
+          - Loki Secret
         * - BUILDITEM_LOKI_SERVICE_HEADLESS
           - Loki Service Headless
         * - BUILDITEM_LOKI_SERVICE
@@ -65,15 +65,12 @@ class LokiStackBuilder(Builder):
         * - object name
           - description
           - default value
-        * - config
-          - ConfigMap
-          - ```<basename>-config```
-        * - config-secret
-          - Secret
-          - ```<basename>-config-secret```
         * - service-account
           - ServiceAccount
           - ```<basename>```
+        * - promtail-config
+          - Promtail ConfigMap
+          - ```<basename>-promtail-config```
         * - promtail-cluster-role
           - Promtail cluster role
           - ```<basename>-promtail```
@@ -86,6 +83,9 @@ class LokiStackBuilder(Builder):
         * - promtail-pod-label-app
           - Promtail label *app* to be used by selection
           - ```<basename>-promtail```
+        * - loki-config-secret
+          - Loki Secret
+          - ```<basename>-loki-config-secret```
         * - loki-service-headless
           - Loki Service headless
           - ```<basename>-loki-headless```
@@ -115,12 +115,12 @@ class LokiStackBuilder(Builder):
     BUILD_CONFIG: TBuild = 'config'
     BUILD_SERVICE: TBuild = 'service'
 
-    BUILDITEM_CONFIG: TBuildItem = 'config'
-    BUILDITEM_CONFIG_SECRET: TBuildItem = 'config-secret'
     BUILDITEM_SERVICE_ACCOUNT: TBuildItem = 'service-account'
+    BUILDITEM_PROMTAIL_CONFIG: TBuildItem = 'promtail-config'
     BUILDITEM_PROMTAIL_CLUSTER_ROLE: TBuildItem = 'promtail-cluster-role'
     BUILDITEM_PROMTAIL_CLUSTER_ROLE_BINDING: TBuildItem = 'promtail-cluster-role-binding'
     BUILDITEM_PROMTAIL_DAEMONSET: TBuildItem = 'promtail-daemonset'
+    BUILDITEM_LOKI_CONFIG_SECRET: TBuildItem = 'loki-config-secret'
     BUILDITEM_LOKI_SERVICE_HEADLESS: TBuildItem = 'loki-service-headless'
     BUILDITEM_LOKI_SERVICE: TBuildItem = 'loki-service'
     BUILDITEM_LOKI_STATEFULSET: TBuildItem = 'loki-statefulset'
@@ -148,8 +148,6 @@ class LokiStackBuilder(Builder):
                 raise InvalidParamError('To bind roles a service account is required')
 
         self.object_names_update({
-            'config': self.basename('-config'),
-            'config-secret': self.basename('-config-secret'),
             'service-account': serviceaccount_name,
         })
 
@@ -157,6 +155,7 @@ class LokiStackBuilder(Builder):
         loki_config.ensure_build_names(loki_config.BUILD_CONFIG, loki_config.BUILD_SERVICE)
 
         self.object_names_update({
+            'loki-config-secret': loki_config.object_name('config-secret'),
             'loki-service-headless': loki_config.object_name('service-headless'),
             'loki-service': loki_config.object_name('service'),
             'loki-statefulset': loki_config.object_name('statefulset'),
@@ -168,6 +167,7 @@ class LokiStackBuilder(Builder):
                                            promtail_config.BUILD_SERVICE)
 
         self.object_names_update({
+            'promtail-config': promtail_config.object_name('config'),
             'promtail-cluster-role': promtail_config.object_name('cluster-role'),
             'promtail-cluster-role-binding': promtail_config.object_name('cluster-role-binding'),
             'promtail-daemonset': promtail_config.object_name('daemonset'),
@@ -206,12 +206,12 @@ class LokiStackBuilder(Builder):
 
     def builditem_names(self) -> Sequence[TBuildItem]:
         return [
-            self.BUILDITEM_CONFIG,
-            self.BUILDITEM_CONFIG_SECRET,
             self.BUILDITEM_SERVICE_ACCOUNT,
+            self.BUILDITEM_PROMTAIL_CONFIG,
             self.BUILDITEM_PROMTAIL_CLUSTER_ROLE,
             self.BUILDITEM_PROMTAIL_CLUSTER_ROLE_BINDING,
             self.BUILDITEM_PROMTAIL_DAEMONSET,
+            self.BUILDITEM_LOKI_CONFIG_SECRET,
             self.BUILDITEM_LOKI_SERVICE_HEADLESS,
             self.BUILDITEM_LOKI_SERVICE,
             self.BUILDITEM_LOKI_STATEFULSET,

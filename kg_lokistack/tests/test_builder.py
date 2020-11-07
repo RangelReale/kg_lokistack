@@ -21,7 +21,7 @@ class TestBuilder(unittest.TestCase):
                 }
             }
         }))
-        self.assertEqual(lokistack_config.object_name('config'), 'loki-stack-config')
+        self.assertEqual(lokistack_config.object_name('promtail-config'), 'loki-stack-promtail-config')
         self.assertEqual(lokistack_config.object_name('loki-statefulset'), 'loki-stack-loki')
 
     def test_basedata(self):
@@ -36,7 +36,7 @@ class TestBuilder(unittest.TestCase):
                 }
             }
         }))
-        self.assertEqual(lokistack_config.object_name('config'), 'mylokistack-config')
+        self.assertEqual(lokistack_config.object_name('promtail-config'), 'mylokistack-promtail-config')
         self.assertEqual(lokistack_config.object_name('loki-statefulset'), 'mylokistack-loki')
 
         FilterJSONPatches_Apply(items=lokistack_config.build(lokistack_config.BUILD_SERVICE), jsonpatches=[
