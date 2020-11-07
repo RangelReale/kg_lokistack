@@ -157,6 +157,11 @@ class LokiStackBuilder(Builder):
                     'config': {
                         'install_plugins': self.option_get('config.grafana_install_plugins'),
                         'service_port': self.option_get('config.grafana_service_port'),
+                        'provisioning': {
+                            'datasources': self.option_get('config.grafana_provisioning.datasources'),
+                            'plugins': self.option_get('config.grafana_provisioning.plugins'),
+                            'dashboards': self.option_get('config.grafana_provisioning.dashboards'),
+                        },
                     },
                     'kubernetes': {
                         'volumes': {
@@ -343,7 +348,7 @@ class LokiStackBuilder(Builder):
                 'spec': {
                     'clusterIP': 'None',
                     'ports': [{
-                        'port': 3100,
+                        'port': self.option_get('config.loki_service_port'),
                         'protocol': 'TCP',
                         'name': 'http-metrics',
                         'targetPort': 'http-metrics'
@@ -366,7 +371,7 @@ class LokiStackBuilder(Builder):
                 'spec': {
                     'type': 'ClusterIP',
                     'ports': [{
-                        'port': 3100,
+                        'port': self.option_get('config.loki_service_port'),
                         'protocol': 'TCP',
                         'name': 'http-metrics',
                         'targetPort': 'http-metrics'
@@ -409,8 +414,8 @@ class LokiStackBuilder(Builder):
                                 'image': self.option_get('container.promtail'),
                                 'args': [
                                     '-config.file=/etc/promtail/promtail.yaml',
-                                    '-client.url=http://{}:3100/loki/api/v1/push'.format(
-                                        self.object_name('loki-service'))
+                                    '-client.url=http://{}:{}/loki/api/v1/push'.format(
+                                        self.object_name('loki-service'), self.option_get('config.loki_service_port'))
                                 ],
                                 'volumeMounts': [{
                                     'name': 'config',
