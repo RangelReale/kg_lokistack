@@ -244,46 +244,8 @@ class LokiStackBuilder(Builder):
                 }, name=self.BUILDITEM_SERVICE_ACCOUNT, source=self.SOURCE_NAME, instance=self.basename()),
             ])
 
-        if self.option_get('config.authorization.roles_create') is not False:
-            ret.extend([
-                Object({
-                    'kind': 'ClusterRole',
-                    'apiVersion': 'rbac.authorization.k8s.io/v1',
-                    'metadata': {
-                        'name': self.object_name('promtail-cluster-role'),
-                    },
-                    'rules': [{
-                        'apiGroups': [''],
-                        'resources': ['nodes',
-                                      'nodes/proxy',
-                                      'services',
-                                      'endpoints',
-                                      'pods'],
-                        'verbs': ['get', 'watch', 'list']
-                    }]
-                }, name=self.BUILDITEM_PROMTAIL_CLUSTER_ROLE, source=self.SOURCE_NAME, instance=self.basename()),
-            ])
-
-        if self.option_get('config.authorization.roles_bind') is not False:
-            ret.extend([
-                Object({
-                    'kind': 'ClusterRoleBinding',
-                    'apiVersion': 'rbac.authorization.k8s.io/v1beta1',
-                    'metadata': {
-                        'name': self.object_name('promtail-cluster-role-binding'),
-                    },
-                    'subjects': [{
-                        'kind': 'ServiceAccount',
-                        'name': self.object_name('service-account'),
-                        'namespace': self.namespace(),
-                    }],
-                    'roleRef': {
-                        'apiGroup': 'rbac.authorization.k8s.io',
-                        'kind': 'ClusterRole',
-                        'name': self.object_name('promtail-cluster-role'),
-                    }
-                }, name=self.BUILDITEM_PROMTAIL_CLUSTER_ROLE_BINDING, source=self.SOURCE_NAME, instance=self.basename())
-            ])
+        ret.extend(self._build_result_change(
+            self._create_promtail_config().build(PromtailBuilder.BUILD_ACCESSCONTROL), 'promtail'))
 
         return ret
 
@@ -291,8 +253,7 @@ class LokiStackBuilder(Builder):
         ret = []
 
         ret.extend(self._build_result_change(
-            self._create_promtail_config().build(PromtailBuilder.BUILD_ACCESSCONTROL,
-                                                 PromtailBuilder.BUILDITEM_CONFIG), 'promtail'))
+            self._create_promtail_config().build(PromtailBuilder.BUILDITEM_CONFIG), 'promtail'))
 
         ret.extend(self._build_result_change(
             self._create_loki_config().build(LokiBuilder.BUILD_CONFIG), 'loki'))
