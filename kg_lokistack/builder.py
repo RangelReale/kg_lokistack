@@ -147,14 +147,14 @@ class LokiStackBuilder(Builder):
             if serviceaccount_name is None:
                 raise InvalidParamError('To bind roles a service account is required')
 
-        self.object_names_update({
+        self.object_names_init({
             'service-account': serviceaccount_name,
         })
 
         loki_config = self._create_loki_config()
         loki_config.ensure_build_names(loki_config.BUILD_CONFIG, loki_config.BUILD_SERVICE)
 
-        self.object_names_update({
+        self.object_names_init({
             'loki-config-secret': loki_config.object_name('config-secret'),
             'loki-service-headless': loki_config.object_name('service-headless'),
             'loki-service': loki_config.object_name('service'),
@@ -166,7 +166,7 @@ class LokiStackBuilder(Builder):
         promtail_config.ensure_build_names(promtail_config.BUILD_ACCESSCONTROL, promtail_config.BUILD_CONFIG,
                                            promtail_config.BUILD_SERVICE)
 
-        self.object_names_update({
+        self.object_names_init({
             'promtail-config': promtail_config.object_name('config'),
             'promtail-cluster-role': promtail_config.object_name('cluster-role'),
             'promtail-cluster-role-binding': promtail_config.object_name('cluster-role-binding'),
@@ -178,7 +178,7 @@ class LokiStackBuilder(Builder):
             granana_config = self._create_granana_config()
             granana_config.ensure_build_names(granana_config.BUILD_CONFIG, granana_config.BUILD_SERVICE)
 
-            self.object_names_update({
+            self.object_names_init({
                 'grafana-deployment': granana_config.object_name('deployment'),
                 'grafana-service': granana_config.object_name('service'),
             })
