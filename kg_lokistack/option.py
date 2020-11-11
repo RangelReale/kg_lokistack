@@ -29,18 +29,26 @@ class LokiStackOptions(Options):
           - add prometheus annotations
           - bool
           - ```False```
+        * - config |rarr| loki_config
+          - Loki config file
+          - str, ConfigFile
+          - :class:`kg_loki.LokiConfigFile`
         * - config |rarr| loki_service_port
           - Loki service port
           - int
-          - 3100
-        * - config |rarr| grafana_install_plugins
-          - Grafana install plugins
-          - Sequence
-          - ```[]```
+          - 80
+        * - config |rarr| promtail_config
+          - Promtail config file
+          - str, ConfigFile
+          - :class:`kg_promtail.PromtailConfigFile` with Kubernetes extension
         * - config |rarr| grafana_service_port
           - Grafana service port
           - int
           - 80
+        * - config |rarr| grafana_install_plugins
+          - Grafana install plugins
+          - Sequence
+          - ```[]```
         * - config |rarr| grafana_provisioning |rarr| datasources
           - Grafana datasource provisioning
           - str, Sequence, ConfigFile
@@ -118,7 +126,7 @@ class LokiStackOptions(Options):
             'config': {
                 'prometheus_annotation': OptionDef(required=True, default_value=False, allowed_types=[bool]),
                 'loki_config': OptionDef(allowed_types=[str, ConfigFile]),
-                'loki_service_port': OptionDef(required=True, default_value=3100, allowed_types=[int]),
+                'loki_service_port': OptionDef(required=True, default_value=80, allowed_types=[int]),
                 'promtail_config': OptionDef(allowed_types=[str, ConfigFile]),
                 'grafana_service_port': OptionDef(required=True, default_value=80, allowed_types=[int]),
                 'grafana_install_plugins': OptionDef(default_value=[], allowed_types=[Sequence]),
