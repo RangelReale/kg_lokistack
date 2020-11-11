@@ -258,6 +258,10 @@ class LokiStackBuilder(Builder):
         ret.extend(self._build_result_change(
             self._create_loki_config().build(LokiBuilder.BUILD_CONFIG), 'loki'))
 
+        if self.option_get('enable.grafana') is not False:
+            ret.extend(self._build_result_change(
+                self._create_granana_config().build(GrafanaBuilder.BUILD_CONFIG), 'grafana'))
+
         return ret
 
     def internal_build_service(self) -> Sequence[ObjectItem]:
