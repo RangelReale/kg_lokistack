@@ -143,7 +143,7 @@ class LokiStackOptions(Options):
                 },
             },
             'enable': {
-                'grafana': OptionDef(required=True, default_value=False, allowed_types=[bool]),
+                'grafana': OptionDef(required=True, default_value=True, allowed_types=[bool]),
             },
             'container': {
                 'promtail': OptionDef(required=True, default_value='grafana/promtail:2.0.0', allowed_types=[str]),
