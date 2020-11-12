@@ -1,7 +1,8 @@
 from typing import Optional, Any, Mapping, Sequence
 
 from kubragen.configfile import ConfigFile
-from kubragen.kdatahelper import KDataHelper_Volume
+from kubragen.kdata import KData_Secret
+from kubragen.kdatahelper import KDataHelper_Volume, KDataHelper_Env
 from kubragen.option import OptionDef, OptionDefFormat
 from kubragen.options import Options
 
@@ -41,6 +42,10 @@ class LokiStackOptions(Options):
           - Promtail config file
           - str, ConfigFile
           - :class:`kg_promtail.PromtailConfigFile` with Kubernetes extension
+        * - config |rarr| grafana_config
+          - Grafana INI config file
+          - str, :class:`kubragen.configfile.ConfigFile`
+          - :class:`kg_grafana.GrafanaConfigFile`
         * - config |rarr| grafana_service_port
           - Grafana service port
           - int
@@ -60,6 +65,14 @@ class LokiStackOptions(Options):
         * - config |rarr| grafana_provisioning |rarr| dashboards
           - Grafana dashboards provisioning
           - str, Sequence, ConfigFile
+          -
+        * - config |rarr| grafana_admin |rarr| user
+          - Grafana admin user name
+          - str, :class:`KData_Value`, :class:`KData_ConfigMap`, :class:`KData_Secret`
+          -
+        * - config |rarr| grafana_admin |rarr| password
+          - Grafana admin password
+          - str, :class:`KData_Secret`
           -
         * - config |rarr| authorization |rarr| serviceaccount_create
           - whether to create a service account
@@ -128,12 +141,17 @@ class LokiStackOptions(Options):
                 'loki_config': OptionDef(allowed_types=[str, ConfigFile]),
                 'loki_service_port': OptionDef(required=True, default_value=80, allowed_types=[int]),
                 'promtail_config': OptionDef(allowed_types=[str, ConfigFile]),
+                'grafana_config': OptionDef(allowed_types=[str, ConfigFile]),
                 'grafana_service_port': OptionDef(required=True, default_value=80, allowed_types=[int]),
                 'grafana_install_plugins': OptionDef(default_value=[], allowed_types=[Sequence]),
                 'grafana_provisioning': {
                     'datasources': OptionDef(allowed_types=[str, Sequence, ConfigFile]),
                     'plugins': OptionDef(allowed_types=[str, Sequence, ConfigFile]),
                     'dashboards': OptionDef(allowed_types=[str, Sequence, ConfigFile]),
+                },
+                'grafana_admin': {
+                    'user': OptionDef(format=OptionDefFormat.KDATA_ENV, allowed_types=[str, *KDataHelper_Env.allowed_kdata()]),
+                    'password': OptionDef(format=OptionDefFormat.KDATA_ENV, allowed_types=[str, KData_Secret]),
                 },
                 'authorization': {
                     'serviceaccount_create': OptionDef(required=True, default_value=True, allowed_types=[bool]),

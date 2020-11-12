@@ -370,12 +370,17 @@ class LokiStackBuilder(Builder):
                 'basename': self.basename('-grafana'),
                 'namespace': self.namespace(),
                 'config': {
+                    'grafana_config': self.option_get('config.grafana_config'),
                     'install_plugins': self.option_get('config.grafana_install_plugins'),
                     'service_port': self.option_get('config.grafana_service_port'),
                     'provisioning': {
                         'datasources': self.option_get('config.grafana_provisioning.datasources'),
                         'plugins': self.option_get('config.grafana_provisioning.plugins'),
                         'dashboards': self.option_get('config.grafana_provisioning.dashboards'),
+                    },
+                    'admin': {
+                        'user': self.option_get('config.grafana_admin.user'),
+                        'password': self.option_get('config.grafana_admin.password'),
                     },
                 },
                 'kubernetes': {
