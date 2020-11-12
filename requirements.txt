@@ -1,4 +1,4 @@
-kubragen>=0.7.24
-kg-grafana>=0.7.8
-kg-loki>=0.7.7
-kg-promtail>=0.7.7
+kubragen>=0.8.2
+kg-grafana>=0.8.0
+kg-loki>=0.8.0
+kg-promtail>=0.8.0

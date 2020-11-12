@@ -1,5 +1,5 @@
 import copy
-from typing import Optional, Sequence, Mapping
+from typing import Optional, Sequence, Mapping, List
 
 from kg_grafana import GrafanaBuilder, GrafanaOptions
 from kg_loki import LokiBuilder, LokiOptions
@@ -111,21 +111,21 @@ class LokiStackBuilder(Builder):
 
     SOURCE_NAME = 'kg_lokistack'
 
-    BUILD_ACCESSCONTROL: TBuild = 'accesscontrol'
-    BUILD_CONFIG: TBuild = 'config'
-    BUILD_SERVICE: TBuild = 'service'
+    BUILD_ACCESSCONTROL = TBuild('accesscontrol')
+    BUILD_CONFIG = TBuild('config')
+    BUILD_SERVICE = TBuild('service')
 
-    BUILDITEM_SERVICE_ACCOUNT: TBuildItem = 'service-account'
-    BUILDITEM_PROMTAIL_CONFIG: TBuildItem = 'promtail-config'
-    BUILDITEM_PROMTAIL_CLUSTER_ROLE: TBuildItem = 'promtail-cluster-role'
-    BUILDITEM_PROMTAIL_CLUSTER_ROLE_BINDING: TBuildItem = 'promtail-cluster-role-binding'
-    BUILDITEM_PROMTAIL_DAEMONSET: TBuildItem = 'promtail-daemonset'
-    BUILDITEM_LOKI_CONFIG_SECRET: TBuildItem = 'loki-config-secret'
-    BUILDITEM_LOKI_SERVICE_HEADLESS: TBuildItem = 'loki-service-headless'
-    BUILDITEM_LOKI_SERVICE: TBuildItem = 'loki-service'
-    BUILDITEM_LOKI_STATEFULSET: TBuildItem = 'loki-statefulset'
-    BUILDITEM_GRAFANA_DEPLOYMENT: TBuildItem = 'grafana-deployment'
-    BUILDITEM_GRAFANA_SERVICE: TBuildItem = 'grafana-service'
+    BUILDITEM_SERVICE_ACCOUNT = TBuildItem('service-account')
+    BUILDITEM_PROMTAIL_CONFIG = TBuildItem('promtail-config')
+    BUILDITEM_PROMTAIL_CLUSTER_ROLE = TBuildItem('promtail-cluster-role')
+    BUILDITEM_PROMTAIL_CLUSTER_ROLE_BINDING = TBuildItem('promtail-cluster-role-binding')
+    BUILDITEM_PROMTAIL_DAEMONSET = TBuildItem('promtail-daemonset')
+    BUILDITEM_LOKI_CONFIG_SECRET = TBuildItem('loki-config-secret')
+    BUILDITEM_LOKI_SERVICE_HEADLESS = TBuildItem('loki-service-headless')
+    BUILDITEM_LOKI_SERVICE = TBuildItem('loki-service')
+    BUILDITEM_LOKI_STATEFULSET = TBuildItem('loki-statefulset')
+    BUILDITEM_GRAFANA_DEPLOYMENT = TBuildItem('grafana-deployment')
+    BUILDITEM_GRAFANA_SERVICE = TBuildItem('grafana-service')
 
     def __init__(self, kubragen: KubraGen, options: Optional[LokiStackOptions] = None):
         super().__init__(kubragen)
@@ -230,7 +230,7 @@ class LokiStackBuilder(Builder):
             raise InvalidNameError('Invalid build name: "{}"'.format(buildname))
 
     def internal_build_accesscontrol(self) -> Sequence[ObjectItem]:
-        ret = []
+        ret: List[ObjectItem] = []
 
         if self.option_get('config.authorization.serviceaccount_create') is not False:
             ret.extend([
@@ -250,10 +250,10 @@ class LokiStackBuilder(Builder):
         return ret
 
     def internal_build_config(self) -> Sequence[ObjectItem]:
-        ret = []
+        ret: List[ObjectItem] = []
 
         ret.extend(self._build_result_change(
-            self._create_promtail_config().build(PromtailBuilder.BUILDITEM_CONFIG), 'promtail'))
+            self._create_promtail_config().build(PromtailBuilder.BUILD_CONFIG), 'promtail'))
 
         ret.extend(self._build_result_change(
             self._create_loki_config().build(LokiBuilder.BUILD_CONFIG), 'loki'))
@@ -265,7 +265,7 @@ class LokiStackBuilder(Builder):
         return ret
 
     def internal_build_service(self) -> Sequence[ObjectItem]:
-        ret = []
+        ret: List[ObjectItem] = []
 
         ret.extend(self._build_result_change(
             self._create_loki_config().build(LokiBuilder.BUILD_SERVICE), 'loki'))
@@ -361,35 +361,35 @@ class LokiStackBuilder(Builder):
         except TypeError as e:
             raise OptionError('Prometheus type error: {}'.format(str(e))) from e
 
-    def _create_granana_config(self) -> Optional[GrafanaBuilder]:
-        if self.option_get('enable.grafana') is not False:
-            try:
-                ret = GrafanaBuilder(kubragen=self.kubragen, options=GrafanaOptions({
-                    'basename': self.basename('-grafana'),
-                    'namespace': self.namespace(),
-                    'config': {
-                        'install_plugins': self.option_get('config.grafana_install_plugins'),
-                        'service_port': self.option_get('config.grafana_service_port'),
-                        'provisioning': {
-                            'datasources': self.option_get('config.grafana_provisioning.datasources'),
-                            'plugins': self.option_get('config.grafana_provisioning.plugins'),
-                            'dashboards': self.option_get('config.grafana_provisioning.dashboards'),
-                        },
+    def _create_granana_config(self) -> GrafanaBuilder:
+        if self.option_get('enable.grafana') is not True:
+            raise InvalidParamError('Grafana is not enabled')
+
+        try:
+            ret = GrafanaBuilder(kubragen=self.kubragen, options=GrafanaOptions({
+                'basename': self.basename('-grafana'),
+                'namespace': self.namespace(),
+                'config': {
+                    'install_plugins': self.option_get('config.grafana_install_plugins'),
+                    'service_port': self.option_get('config.grafana_service_port'),
+                    'provisioning': {
+                        'datasources': self.option_get('config.grafana_provisioning.datasources'),
+                        'plugins': self.option_get('config.grafana_provisioning.plugins'),
+                        'dashboards': self.option_get('config.grafana_provisioning.dashboards'),
                     },
-                    'kubernetes': {
-                        'volumes': {
-                            'data': self.option_get('kubernetes.volumes.grafana-data'),
-                        },
-                        'resources': {
-                            'deployment': self.option_get('kubernetes.resources.grafana-deployment'),
-                        },
+                },
+                'kubernetes': {
+                    'volumes': {
+                        'data': self.option_get('kubernetes.volumes.grafana-data'),
                     },
-                }))
-                ret.object_names_change(self._object_names_changed('grafana-'))
-                return ret
-            except OptionError as e:
-                raise OptionError('Grafana option error: {}'.format(str(e))) from e
-            except TypeError as e:
-                raise OptionError('Grafana type error: {}'.format(str(e))) from e
-        else:
-            return None
+                    'resources': {
+                        'deployment': self.option_get('kubernetes.resources.grafana-deployment'),
+                    },
+                },
+            }))
+            ret.object_names_change(self._object_names_changed('grafana-'))
+            return ret
+        except OptionError as e:
+            raise OptionError('Grafana option error: {}'.format(str(e))) from e
+        except TypeError as e:
+            raise OptionError('Grafana type error: {}'.format(str(e))) from e
