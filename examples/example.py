@@ -53,11 +53,15 @@ lokistack_config = LokiStackBuilder(kubragen=kg, options=LokiStackOptions({
     'namespace': OptionRoot('namespaces.mon'),
     'basename': 'mylokistack',
     'config': {
-        'loki_config': lokiconfigfile,
-        'grafana_admin': {
-            'user': 'myuser',
-            'password': 'mypassword',
+        'loki': {
+            'loki_config': lokiconfigfile,
         },
+        'grafana': {
+            'admin': {
+                'user': 'myuser',
+                'password': 'mypassword',
+            },
+        }
     },
     'kubernetes': {
         'volumes': {

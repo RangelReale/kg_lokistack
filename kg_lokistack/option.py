@@ -30,47 +30,59 @@ class LokiStackOptions(Options):
           - add prometheus annotations
           - bool
           - ```False```
-        * - config |rarr| loki_config
+        * - config |rarr| loki |rarr| loki_config
           - Loki config file
           - str, ConfigFile
           - :class:`kg_loki.LokiConfigFile`
-        * - config |rarr| loki_service_port
+        * - config |rarr| loki |rarr| service_port
           - Loki service port
           - int
           - 80
-        * - config |rarr| promtail_config
+        * - config |rarr| promtail |rarr| promtail_config
           - Promtail config file
           - str, ConfigFile
           - :class:`kg_promtail.PromtailConfigFile` with Kubernetes extension
-        * - config |rarr| grafana_config
+        * - config |rarr| grafana |rarr| grafana_config
           - Grafana INI config file
           - str, :class:`kubragen.configfile.ConfigFile`
           - :class:`kg_grafana.GrafanaConfigFile`
-        * - config |rarr| grafana_service_port
+        * - config |rarr| grafana |rarr| service_port
           - Grafana service port
           - int
           - 80
-        * - config |rarr| grafana_install_plugins
+        * - config |rarr| grafana |rarr| install_plugins
           - Grafana install plugins
           - Sequence
           - ```[]```
-        * - config |rarr| grafana_provisioning |rarr| datasources
+        * - config |rarr| grafana |rarr| provisioning |rarr| datasources
           - Grafana datasource provisioning
           - str, Sequence, ConfigFile
           -
-        * - config |rarr| grafana_provisioning |rarr| plugins
+        * - config |rarr| grafana |rarr| provisioning |rarr| plugins
           - Grafana plugins provisioning
           - str, Sequence, ConfigFile
           -
-        * - config |rarr| grafana_provisioning |rarr| dashboards
-          - Grafana dashboards provisioning
+        * - config |rarr| grafana |rarr| provisioning |rarr| dashboards
+          - Grafana dashboards provisioning. ```options.path``` will be set automatically if it is not set
           - str, Sequence, ConfigFile
           -
-        * - config |rarr| grafana_admin |rarr| user
+        * - config |rarr| grafana  |rarr| dashboards
+          - Grafana dashboards to pre install
+          - :class:`Sequence[GrafanaDashboardSource]`
+          -
+        * - config |rarr| grafana  |rarr| dashboards_path
+          - The root path where Grafana dashboards will be installed on the container.
+          - str
+          - ```/var/lib/grafana/dashboards```
+        * - config |rarr| grafana  |rarr| dashboard_config_max_size
+          - The maximum size of a Grafana dashboard config ConfigMap size (set None to disable check)
+          - int
+          - 250000
+        * - config |rarr| grafana |rarr| admin |rarr| user
           - Grafana admin user name
           - str, :class:`KData_Value`, :class:`KData_ConfigMap`, :class:`KData_Secret`
           -
-        * - config |rarr| grafana_admin |rarr| password
+        * - config |rarr| grafana |rarr| admin |rarr| password
           - Grafana admin password
           - str, :class:`KData_Secret`
           -
@@ -138,20 +150,30 @@ class LokiStackOptions(Options):
             'namespace': OptionDef(required=True, default_value='loki-stack', allowed_types=[str]),
             'config': {
                 'prometheus_annotation': OptionDef(required=True, default_value=False, allowed_types=[bool]),
-                'loki_config': OptionDef(allowed_types=[str, ConfigFile]),
-                'loki_service_port': OptionDef(required=True, default_value=80, allowed_types=[int]),
-                'promtail_config': OptionDef(allowed_types=[str, ConfigFile]),
-                'grafana_config': OptionDef(allowed_types=[str, ConfigFile]),
-                'grafana_service_port': OptionDef(required=True, default_value=80, allowed_types=[int]),
-                'grafana_install_plugins': OptionDef(default_value=[], allowed_types=[Sequence]),
-                'grafana_provisioning': {
-                    'datasources': OptionDef(allowed_types=[str, Sequence, ConfigFile]),
-                    'plugins': OptionDef(allowed_types=[str, Sequence, ConfigFile]),
-                    'dashboards': OptionDef(allowed_types=[str, Sequence, ConfigFile]),
+                'loki': {
+                    'loki_config': OptionDef(allowed_types=[str, ConfigFile]),
+                    'service_port': OptionDef(required=True, default_value=80, allowed_types=[int]),
                 },
-                'grafana_admin': {
-                    'user': OptionDef(format=OptionDefFormat.KDATA_ENV, allowed_types=[str, *KDataHelper_Env.allowed_kdata()]),
-                    'password': OptionDef(format=OptionDefFormat.KDATA_ENV, allowed_types=[str, KData_Secret]),
+                'promtail': {
+                    'promtail_config': OptionDef(allowed_types=[str, ConfigFile]),
+                },
+                'grafana': {
+                    'grafana_config': OptionDef(allowed_types=[str, ConfigFile]),
+                    'service_port': OptionDef(required=True, default_value=80, allowed_types=[int]),
+                    'install_plugins': OptionDef(default_value=[], allowed_types=[Sequence]),
+                    'provisioning': {
+                        'datasources': OptionDef(allowed_types=[str, Sequence, ConfigFile]),
+                        'plugins': OptionDef(allowed_types=[str, Sequence, ConfigFile]),
+                        'dashboards': OptionDef(allowed_types=[str, Sequence, ConfigFile]),
+                    },
+                    'dashboards': OptionDef(allowed_types=[Sequence]),
+                    'dashboards_path': OptionDef(required=True, default_value='/var/lib/grafana/dashboards',
+                                                 allowed_types=[str]),
+                    'dashboard_config_max_size': OptionDef(default_value=250000, allowed_types=[int]),
+                    'admin': {
+                        'user': OptionDef(format=OptionDefFormat.KDATA_ENV, allowed_types=[str, *KDataHelper_Env.allowed_kdata()]),
+                        'password': OptionDef(format=OptionDefFormat.KDATA_ENV, allowed_types=[str, KData_Secret]),
+                    },
                 },
                 'authorization': {
                     'serviceaccount_create': OptionDef(required=True, default_value=True, allowed_types=[bool]),

@@ -302,8 +302,8 @@ class LokiStackBuilder(Builder):
                 'namespace': self.namespace(),
                 'config': {
                     'prometheus_annotation': self.option_get('config.prometheus_annotation'),
-                    'loki_config': self.option_get('config.loki_config'),
-                    'service_port': self.option_get('config.loki_service_port'),
+                    'loki_config': self.option_get('config.loki.loki_config'),
+                    'service_port': self.option_get('config.loki.service_port'),
                     'authorization': {
                         'serviceaccount_use': self.object_name('service-account'),
                     },
@@ -326,7 +326,7 @@ class LokiStackBuilder(Builder):
 
     def _create_promtail_config(self) -> PromtailBuilder:
         try:
-            config = self.option_get('config.promtail_config')
+            config = self.option_get('config.promtail.promtail_config')
             if config is None:
                 config = PromtailConfigFile(extensions=[PromtailConfigFileExt_Kubernetes()])
 
@@ -337,7 +337,7 @@ class LokiStackBuilder(Builder):
                     'prometheus_annotation': self.option_get('config.prometheus_annotation'),
                     'promtail_config': config,
                     'loki_url': 'http://{}:{}'.format(self.object_name('loki-service'),
-                                                      self.option_get('config.loki_service_port')),
+                                                      self.option_get('config.loki.service_port')),
                     'authorization': {
                         'serviceaccount_create': False,
                         'serviceaccount_use': self.object_name('service-account'),
@@ -370,17 +370,17 @@ class LokiStackBuilder(Builder):
                 'basename': self.basename('-grafana'),
                 'namespace': self.namespace(),
                 'config': {
-                    'grafana_config': self.option_get('config.grafana_config'),
-                    'install_plugins': self.option_get('config.grafana_install_plugins'),
-                    'service_port': self.option_get('config.grafana_service_port'),
+                    'grafana_config': self.option_get('config.grafana.grafana_config'),
+                    'install_plugins': self.option_get('config.grafana.install_plugins'),
+                    'service_port': self.option_get('config.grafana.service_port'),
                     'provisioning': {
-                        'datasources': self.option_get('config.grafana_provisioning.datasources'),
-                        'plugins': self.option_get('config.grafana_provisioning.plugins'),
-                        'dashboards': self.option_get('config.grafana_provisioning.dashboards'),
+                        'datasources': self.option_get('config.grafana.provisioning.datasources'),
+                        'plugins': self.option_get('config.grafana.provisioning.plugins'),
+                        'dashboards': self.option_get('config.grafana.provisioning.dashboards'),
                     },
                     'admin': {
-                        'user': self.option_get('config.grafana_admin.user'),
-                        'password': self.option_get('config.grafana_admin.password'),
+                        'user': self.option_get('config.grafana.admin.user'),
+                        'password': self.option_get('config.grafana.admin.password'),
                     },
                 },
                 'kubernetes': {
